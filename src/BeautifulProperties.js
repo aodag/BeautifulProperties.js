@@ -656,5 +656,70 @@
     };
   })(BeautifulProperties.Observable,BeautifulProperties.Events);
 
+  BeautifulProperties.Versionizable = Object.create(null);
+  (function (Versionizable,Hookable,PropertySpecific) {
+    /**
+     * @property {Array} history
+     * @constructor
+     */
+    function History() {
+      this.history = [];
+    }
+    PropertySpecific.mixinRetriever('Versionizable::History',History);
+    var retrieveHistory = retrieveInternalObject.bind(null,'Versionizable::History',true);
+    // internal functions
+    var retrieveHooks = Internal.Hookable.retrieveHooks;
+    var retrieveDescriptor = Internal.Hookable.retrieveDescriptor;
+    var hasHooks = (function (retrieve) {
+      function hasHooks(object,key) {
+        return !!retrieve(object,key);
+      }
+      return hasHooks;
+    })(PropertySpecific.retrieverFactory('Hookable::Hooks',false));
+
+    Versionizable.getOldVersion = function getOldVersion(object,key) {
+    };
+    Versionizable.getPreviousVersion = function getPreviousVersion(object,key) {
+      var history = retrieveHistory(object)(key);
+      return history.history[1];
+    };
+    /**
+     *
+     * @param {object} object
+     * @param {string} key
+     * @param {{length:?number,equals:?function}} options
+     *  length's default value is 2.
+     */
+    Versionizable.define = function define(object,key,options) {
+      options = options || Object.create(null);
+      if (options.length === undefined) {
+        options.length = 2;
+      }
+      // Versionizable property depends on Hookable.
+      if (!hasHooks(object,key)) {
+        Hookable.define(object,key);
+      }
+      var descriptor = retrieveDescriptor(object,key);
+      var hooks = retrieveHooks(object,key);
+      // 名前変える
+      function checkChangeAndTrigger(val,previousVal) {
+        var history = retrieveHistory(object)(key);
+        // TODO Observableのdescriptor.equalsを引き継ぐ
+        var equals = options.equals;
+        var shouldEnqueue = (!equals && previousVal != val)
+        || (equals && equals.call(this,val,previousVal));
+        if (shouldEnqueue) {
+          history.history.unshift(val);
+          history.history.length = options.length;
+        }
+      }
+      if (descriptor.get) {
+        hooks.refresh.unshift(checkChangeAndTrigger);
+      } else {
+        hooks.afterSet.unshift(checkChangeAndTrigger);
+      }
+    };
+  })(BeautifulProperties.Versionizable,BeautifulProperties.Hookable,InternalObject.PropertySpecific);
+
   return BeautifulProperties;
 })(this),'BeautifulProperties',this);
